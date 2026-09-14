@@ -9024,6 +9024,134 @@ export default { fmt, lint };
     },
   );
 
+  it.each([
+    '--config "config files/lint.jsonc"',
+    "-c 'config files/lint.jsonc'",
+    '--config="config files/lint.jsonc"',
+    '-c="config files/lint.jsonc"',
+    '-c"config files/lint.jsonc"',
+    '"--config" "config files/lint.jsonc"',
+    '"--config=config files/lint.jsonc"',
+  ])('preserves inheritance rooted at a custom script config: %s', (args) => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(path.join(appDir, 'config files'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'root' }));
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', scripts: { lint: `vp lint ${args} src` } }),
+    );
+    const rootConfig = '{"rules":{"no-console":"error"}}\n';
+    const customConfig = '// Shared lint rules\n{"extends":["../../../.oxlintrc.json"]}\n';
+    fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), rootConfig);
+    fs.writeFileSync(path.join(appDir, 'config files/lint.jsonc'), customConfig);
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), 'export default {};\n');
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    for (let run = 0; run < 2; run++) {
+      expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, '.oxlintrc.json'), 'utf8')).toBe(rootConfig);
+      expect(fs.readFileSync(path.join(appDir, 'config files/lint.jsonc'), 'utf8')).toBe(
+        customConfig,
+      );
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(
+        'export default {};\n',
+      );
+    }
+  });
+
+  it.each(['vp lint --config "$LINT_CONFIG"', 'cd config && vp lint -c lint.json'])(
+    'preserves configs when a script config path is uncertain: %s',
+    (lint) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'root', scripts: { lint } }),
+      );
+      const config = '{"rules":{"no-console":"error"}}\n';
+      fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), config);
+      expect(
+        finalizeCoreMigrationForExistingVitePlus(
+          makeWorkspaceInfo(tmpDir, PackageManager.npm),
+          true,
+        ).oxcConfigs,
+      ).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, '.oxlintrc.json'), 'utf8')).toBe(config);
+      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    },
+  );
+
+  it.each([
+    ['./config/shared.ts', 'shared.ts'],
+    ['./config/shared', 'shared.ts'],
+    ['./config/shared.base', 'shared.base.ts'],
+    ['./config/shared.js', 'shared.ts'],
+    ['./config/shared.mjs', 'shared.mts'],
+    ['./config/shared.cjs', 'shared.cts'],
+    ['./config', 'index.ts'],
+  ])('preserves configs imported through the shared Vite module %s', (specifier, filename) => {
+    fs.mkdirSync(path.join(tmpDir, 'config'));
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'root' }));
+    const config = `import shared from '${specifier}';\nexport default { ...shared };\n`;
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), config);
+    // Follow a re-export, a readFileSync path, and a cycle without evaluating code.
+    fs.writeFileSync(
+      path.join(tmpDir, 'config', filename),
+      "export { default } from './tools.ts';\nthrow new Error('must not execute shared config');\n",
+    );
+    // A competing source must not hide references under another config loader.
+    if (specifier.endsWith('.js')) {
+      fs.writeFileSync(path.join(tmpDir, specifier), 'export default {};\n');
+    }
+    fs.writeFileSync(
+      path.join(tmpDir, 'config/tools.ts'),
+      `import './${filename}';
+import { readFileSync } from 'node:fs';
+import lint from '../.oxlintrc.json' with { type: 'json' };
+const fmt = JSON.parse(readFileSync(new URL('../.oxfmtrc.json', import.meta.url), 'utf8'));
+export default { fmt, lint };
+`,
+    );
+    const lint = '{"rules":{"no-console":"error"}}\n';
+    const fmt = '{"singleQuote":true}\n';
+    fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), lint);
+    fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), fmt);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+
+    for (let run = 0; run < 2; run++) {
+      expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, '.oxlintrc.json'), 'utf8')).toBe(lint);
+      expect(fs.readFileSync(path.join(tmpDir, '.oxfmtrc.json'), 'utf8')).toBe(fmt);
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(config);
+    }
+  });
+
+  it('still merges unreferenced configs alongside custom config arguments and local imports', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', scripts: { lint: 'vp lint --config custom.json src' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'custom.json'), '{"rules":{"no-debugger":"error"}}\n');
+    fs.writeFileSync(path.join(tmpDir, 'shared.ts'), 'export default { define: {} };\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      "import shared from './shared';\nexport default { ...shared };\n",
+    );
+    fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), '{"singleQuote":true}\n');
+    fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), '{"rules":{"no-console":"error"}}\n');
+
+    expect(
+      finalizeCoreMigrationForExistingVitePlus(makeWorkspaceInfo(tmpDir, PackageManager.npm), true)
+        .oxcConfigs,
+    ).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'custom.json'), 'utf8')).toBe(
+      '{"rules":{"no-debugger":"error"}}\n',
+    );
+  });
+
   it('keeps an unmergeable config and reports the incomplete migration', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
