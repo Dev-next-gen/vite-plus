@@ -15,6 +15,25 @@ steps = [
 ]
 
 [[case]]
+name = "migration_existing_oxc_configs_unreferenced_lint"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", "{\"rules\":{\"no-console\":\"error\"},\"options\":{\"typeAware\":false,\"typeCheck\":false}}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "finish both unreferenced Oxc configs in a project that already uses Vite+" },
+  ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"],
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "fmt", "src/index.ts"],
+  ["vpt", "print-file", "src/index.ts"],
+  ["vp", "lint", "src/index.ts"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "the restored finalization must remain a no-op on retry" },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "fmt", "--check", "src/index.ts"],
+  { argv = ["vpt", "write-file", "src/index.ts", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "lint", "src/index.ts"], comment = "the merged lint rule must apply after the JSON config is removed", continue-on-failure = true },
+]
+
+[[case]]
 name = "migration_existing_oxc_configs_inline_fmt"
 vp = "global"
 steps = [
