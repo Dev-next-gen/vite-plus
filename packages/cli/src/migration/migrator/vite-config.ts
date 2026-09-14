@@ -255,33 +255,47 @@ export function mergeViteConfigFiles(
     return;
   }
   const fullViteConfigPath = configs.viteConfig && path.join(projectPath, configs.viteConfig);
-  const viteConfigContent = fullViteConfigPath ? fs.readFileSync(fullViteConfigPath, 'utf8') : '';
   const rootDir = workspaceRoot ?? projectPath;
   const projectPaths = new Set([
     rootDir,
     projectPath,
     ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path)),
   ]);
-  const scripts: string[] = [];
+  const configReferences: string[] = [];
+  const lintConfigPaths = new Set<string>();
   const preservedLintConfigs = new Set<string>();
   for (const projectDir of projectPaths) {
     const packageJsonPath = path.join(projectDir, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
       const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
-      scripts.push(...Object.values(pkg.scripts ?? {}));
+      configReferences.push(...Object.values(pkg.scripts ?? {}));
     }
-    const lintConfig = detectConfigs(projectDir).oxlintConfig;
-    if (lintConfig) {
-      const lintConfigPath = path.join(projectDir, lintConfig);
-      const json = readJsonFile(lintConfigPath, true) as { extends?: unknown };
-      if (Array.isArray(json.extends) && json.extends.length > 0) {
-        // JSON extends uses file paths; inline lint.extends requires config objects.
-        // Keep both the extending config and any workspace configs it loads.
-        preservedLintConfigs.add(lintConfigPath);
-        for (const extendedConfig of json.extends) {
-          if (typeof extendedConfig === 'string') {
-            preservedLintConfigs.add(path.resolve(projectDir, extendedConfig));
-          }
+    const projectConfigs = detectConfigs(projectDir);
+    if (projectConfigs.viteConfig) {
+      configReferences.push(
+        fs.readFileSync(path.join(projectDir, projectConfigs.viteConfig), 'utf8'),
+      );
+    }
+    if (projectConfigs.oxlintConfig) {
+      lintConfigPaths.add(path.resolve(projectDir, projectConfigs.oxlintConfig));
+    }
+  }
+  // Set iteration also visits newly discovered targets, once each, including
+  // custom filenames. This follows transitive extends without looping on cycles.
+  for (const lintConfigPath of lintConfigPaths) {
+    if (!fs.existsSync(lintConfigPath)) {
+      continue;
+    }
+    const json = readJsonFile(lintConfigPath, true) as { extends?: unknown } | null | undefined;
+    if (Array.isArray(json?.extends) && json.extends.length > 0) {
+      // JSON extends uses file paths; inline lint.extends requires config objects.
+      // Keep both the extending config and every config in its inheritance chain.
+      preservedLintConfigs.add(lintConfigPath);
+      for (const extendedConfig of json.extends) {
+        if (typeof extendedConfig === 'string') {
+          const extendedConfigPath = path.resolve(path.dirname(lintConfigPath), extendedConfig);
+          preservedLintConfigs.add(extendedConfigPath);
+          lintConfigPaths.add(extendedConfigPath);
         }
       }
     }
@@ -293,9 +307,8 @@ export function mergeViteConfigFiles(
     // deliberately conservative because script paths can depend on shell state.
     return (
       (!fullViteConfigPath || !hasConfigKey(fullViteConfigPath, configKey)) &&
-      !viteConfigContent.includes(filename) &&
-      !preservedLintConfigs.has(path.join(projectPath, filename)) &&
-      !scripts.some((script) => script.includes(filename))
+      !preservedLintConfigs.has(path.resolve(projectPath, filename)) &&
+      !configReferences.some((content) => content.includes(filename))
     );
   };
   if (configs.oxlintConfig && !canMergeConfig(configs.oxlintConfig, 'lint')) {
