@@ -26,7 +26,7 @@ export const message = "preserved"
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
-remove the leftover standalone config without changing the existing fmt config
+keep the standalone config when fmt is already configured
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -45,10 +45,10 @@ VITE+ - The Unified Toolchain for the Web
 export default { fmt: { singleQuote: false, semi: false } };
 ```
 
-## `vpt stat-file .oxfmtrc.json --assert-not file`
+## `vpt stat-file .oxfmtrc.json --assert file`
 
 ```
-.oxfmtrc.json: missing
+.oxfmtrc.json: file
 ```
 
 ## `vp fmt src/index.ts`

@@ -8880,7 +8880,7 @@ describe('existing Vite+ core migration finalization', () => {
     expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
   });
 
-  it('preserves existing inline config when removing a redundant standalone config', () => {
+  it('preserves standalone configs when the tool already has an inline config', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
@@ -8890,11 +8890,98 @@ describe('existing Vite+ core migration finalization', () => {
     fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), '{"singleQuote":true}\n');
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.npm);
 
-    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(true);
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(config);
-    expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, '.oxfmtrc.json'), 'utf8')).toBe(
+      '{"singleQuote":true}\n',
+    );
     expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
   });
+
+  it.each([
+    `import fmt from './.oxfmtrc.json' with { type: 'json' };
+import lint from './.oxlintrc.json' with { type: 'json' };
+export default { fmt, lint };
+`,
+    `import { readFileSync } from 'node:fs';
+const fmt = JSON.parse(readFileSync(new URL('./.oxfmtrc.json', import.meta.url), 'utf8'));
+const lint = JSON.parse(readFileSync(new URL('./.oxlintrc.json', import.meta.url), 'utf8'));
+export default { fmt, lint };
+`,
+    `import config from './.oxfmtrc.json' with { type: 'json' };
+export default { define: { config: JSON.stringify(config) } };
+`,
+  ])('preserves config files loaded by vite.config.ts (%#)', (config) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), config);
+    fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), '{"singleQuote":true}\n');
+    if (config.includes('.oxlintrc.json')) {
+      fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), '{"rules":{"no-console":"error"}}\n');
+    }
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+
+    for (let run = 0; run < 2; run++) {
+      expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(config);
+      expect(fs.readFileSync(path.join(tmpDir, '.oxfmtrc.json'), 'utf8')).toBe(
+        '{"singleQuote":true}\n',
+      );
+      if (config.includes('.oxlintrc.json')) {
+        expect(fs.readFileSync(path.join(tmpDir, '.oxlintrc.json'), 'utf8')).toBe(
+          '{"rules":{"no-console":"error"}}\n',
+        );
+      }
+    }
+  });
+
+  it.each(['.', 'packages/app'])(
+    'preserves configs used by scripts in %s without an inline tool config',
+    (packagePath) => {
+      const appDir = path.join(tmpDir, packagePath);
+      fs.mkdirSync(appDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'root', devDependencies: { 'vite-plus': 'latest' } }),
+      );
+      const prefix = packagePath === '.' ? './' : '../../';
+      fs.writeFileSync(
+        path.join(appDir, 'package.json'),
+        JSON.stringify({
+          name: 'app',
+          devDependencies: { 'vite-plus': 'latest' },
+          scripts: {
+            fmt: `vp fmt -c ${prefix}.oxfmtrc.json src --write`,
+            lint: `vp lint --config=${prefix}.oxlintrc.json src`,
+          },
+        }),
+      );
+      fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), 'export default {};\n');
+      fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), '{"singleQuote":true}\n');
+      fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), '{"rules":{"no-console":"error"}}\n');
+      const workspaceInfo = {
+        ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+        packages: packagePath === '.' ? [] : [{ name: 'app', path: packagePath }],
+      };
+
+      for (let run = 0; run < 2; run++) {
+        expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(
+          false,
+        );
+        expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(
+          'export default {};\n',
+        );
+        expect(fs.readFileSync(path.join(tmpDir, '.oxfmtrc.json'), 'utf8')).toBe(
+          '{"singleQuote":true}\n',
+        );
+        expect(fs.readFileSync(path.join(tmpDir, '.oxlintrc.json'), 'utf8')).toBe(
+          '{"rules":{"no-console":"error"}}\n',
+        );
+      }
+    },
+  );
 
   it('keeps an unmergeable config and reports the incomplete migration', () => {
     fs.writeFileSync(
@@ -8916,6 +9003,31 @@ describe('existing Vite+ core migration finalization', () => {
     expect(result.oxcConfigs).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(true);
     expect(report.warnings.some((warning) => warning.includes('Failed to merge'))).toBe(true);
+  });
+
+  it('preserves JSON lint inheritance across workspace packages', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+    fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'app' }));
+    const rootConfig = '{"rules":{"no-console":"error"}}\n';
+    const appConfig = '{"extends":["../../.oxlintrc.json"],"rules":{"no-debugger":"error"}}\n';
+    fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), rootConfig);
+    fs.writeFileSync(path.join(appDir, '.oxlintrc.json'), appConfig);
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    for (let run = 0; run < 2; run++) {
+      expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, '.oxlintrc.json'), 'utf8')).toBe(rootConfig);
+      expect(fs.readFileSync(path.join(appDir, '.oxlintrc.json'), 'utf8')).toBe(appConfig);
+      expect(fs.existsSync(path.join(appDir, 'vite.config.ts'))).toBe(false);
+    }
   });
 
   it('detects package-level legacy signals in workspaces', () => {
@@ -9099,11 +9211,34 @@ export default defineConfig({
 
     const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
     expect(viteConfig.match(/\bfmt\s*:/g)?.length).toBe(1);
-    // Template-authored value wins (singleQuote: true) — standalone config dropped.
+    // Template-authored value wins (singleQuote: true).
     expect(viteConfig).toContain('singleQuote: true');
     expect(viteConfig).not.toContain('singleQuote: false');
-    // Redundant standalone file removed.
-    expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(false);
+    // The standalone file can still be used outside this config.
+    expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(true);
+  });
+
+  it('does not inject defaults over configs retained for explicit script arguments', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        scripts: { fmt: 'oxfmt -c .oxfmtrc.json src', lint: 'oxlint -c .oxlintrc.json src' },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), '{"singleQuote":true}\n');
+    fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), '{"rules":{"no-console":"error"}}\n');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, '.oxfmtrc.json'), 'utf8')).toBe(
+      '{"singleQuote":true}\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, '.oxlintrc.json'), 'utf8')).toBe(
+      '{"rules":{"no-console":"error"}}\n',
+    );
   });
 });
 

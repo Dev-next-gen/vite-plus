@@ -254,6 +254,59 @@ export function mergeViteConfigFiles(
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;
   }
+  const fullViteConfigPath = configs.viteConfig && path.join(projectPath, configs.viteConfig);
+  const viteConfigContent = fullViteConfigPath ? fs.readFileSync(fullViteConfigPath, 'utf8') : '';
+  const rootDir = workspaceRoot ?? projectPath;
+  const projectPaths = new Set([
+    rootDir,
+    projectPath,
+    ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path)),
+  ]);
+  const scripts: string[] = [];
+  const preservedLintConfigs = new Set<string>();
+  for (const projectDir of projectPaths) {
+    const packageJsonPath = path.join(projectDir, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
+      scripts.push(...Object.values(pkg.scripts ?? {}));
+    }
+    const lintConfig = detectConfigs(projectDir).oxlintConfig;
+    if (lintConfig) {
+      const lintConfigPath = path.join(projectDir, lintConfig);
+      const json = readJsonFile(lintConfigPath, true) as { extends?: unknown };
+      if (Array.isArray(json.extends) && json.extends.length > 0) {
+        // JSON extends uses file paths; inline lint.extends requires config objects.
+        // Keep both the extending config and any workspace configs it loads.
+        preservedLintConfigs.add(lintConfigPath);
+        for (const extendedConfig of json.extends) {
+          if (typeof extendedConfig === 'string') {
+            preservedLintConfigs.add(path.resolve(projectDir, extendedConfig));
+          }
+        }
+      }
+    }
+  }
+  const canMergeConfig = (filename: string, configKey: string): boolean => {
+    // An existing tool config can load the JSON file indirectly. Direct imports,
+    // readFileSync calls, and package scripts can also use it without a tool key.
+    // Keep these files intact, including their lint options. A filename match is
+    // deliberately conservative because script paths can depend on shell state.
+    return (
+      (!fullViteConfigPath || !hasConfigKey(fullViteConfigPath, configKey)) &&
+      !viteConfigContent.includes(filename) &&
+      !preservedLintConfigs.has(path.join(projectPath, filename)) &&
+      !scripts.some((script) => script.includes(filename))
+    );
+  };
+  if (configs.oxlintConfig && !canMergeConfig(configs.oxlintConfig, 'lint')) {
+    configs.oxlintConfig = undefined;
+  }
+  if (configs.oxfmtConfig && !canMergeConfig(configs.oxfmtConfig, 'fmt')) {
+    configs.oxfmtConfig = undefined;
+  }
+  if (!configs.oxlintConfig && !configs.oxfmtConfig) {
+    return;
+  }
   const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
   if (configs.oxlintConfig) {
     // Inject options.typeAware and options.typeCheck defaults before merging
@@ -378,6 +431,13 @@ function injectConfigDefaults(
   report?: MigrationReport,
 ): void {
   const configs = detectConfigs(projectPath);
+  // A config retained for imports, scripts, or extends must keep taking effect.
+  if (
+    (configKey === 'lint' && configs.oxlintConfig) ||
+    (configKey === 'fmt' && configs.oxfmtConfig)
+  ) {
+    return;
+  }
   if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), configKey)) {
     return;
   }
