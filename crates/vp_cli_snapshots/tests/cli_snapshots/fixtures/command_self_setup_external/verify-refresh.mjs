@@ -50,10 +50,10 @@ function createEnvironment(directory) {
   };
 }
 
-function run(binary, args, cwd, env) {
+function run(binary, args, cwd, env, expectedStatus = 0) {
   const result = spawnSync(binary, args, { cwd, env, encoding: 'utf8', timeout: 30000 });
-  assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
-  return result.stdout.trim();
+  assert.equal(result.status, expectedStatus, result.error?.message ?? result.stdout + result.stderr);
+  return result.stdout;
 }
 
 function readSettings(env) {
@@ -94,23 +94,23 @@ function verifyDoctor(source) {
       external: true,
     },
   ];
+  const shim = path.join(shimBin, 'vp');
   for (const { label, paths, status, missingVp, external } of cases) {
-    const shim = path.join(shimBin, 'vp');
     if (missingVp) fs.renameSync(shim, `${shim}.hidden`);
     if (external) fs.unlinkSync(receipt);
-    let result;
+    let output;
     try {
-      result = spawnSync(binary, ['env', 'doctor', 'node'], {
-        cwd: directory,
-        env: { ...env, PATH: paths.join(path.delimiter) },
-        encoding: 'utf8',
-        timeout: 30000,
-      });
+      output = run(
+        binary,
+        ['env', 'doctor', 'node'],
+        directory,
+        { ...env, PATH: paths.join(path.delimiter) },
+        status,
+      );
     } finally {
       if (missingVp) fs.renameSync(`${shim}.hidden`, shim);
     }
-    assert.equal(result.status, status, result.error?.message ?? result.stdout + result.stderr);
-    const text = result.stdout.replace(/\u001b\[[0-9;]*m/g, '');
+    const text = output.replace(/\u001b\[[0-9;]*m/g, '');
     assert.equal(/CLI source\s+Homebrew/.test(text), !external, text);
     console.log(label);
     console.log(
@@ -174,7 +174,7 @@ function verifyReplacement(source) {
     TEST_NODE: process.execPath,
     TEST_SCRIPT: fileURLToPath(import.meta.url),
   });
-  assert.equal(output, 'bundle-old\n21\nbundle-new\nbundle-new\nbundle-new\n42');
+  assert.equal(output.trim(), 'bundle-old\n21\nbundle-new\nbundle-new\nbundle-new\n42');
   assert.deepEqual(readSettings(env), before, 'mixed choices changed after a package upgrade');
   // Explicit setup must preserve the public entrypoint too.
   run(publicVp, ['env', 'setup', '--refresh'], root, env);

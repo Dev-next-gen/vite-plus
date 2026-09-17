@@ -181,7 +181,6 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     } else {
         management_default()?
     };
-    let node_mode = if in_place { None } else { node_override.or(default_mode) };
     let version = env!("CARGO_PKG_VERSION");
     let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER)
         .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY))
@@ -210,15 +209,15 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
 
     // 1. Prepare the payload before activating it. Upgrade has already done this in the in-place case.
     let previous_version = install::read_current_version(&dirs.data).await;
-    let version_dir = if in_place || bundled {
+    let version_dir = if deploy {
+        let name =
+            install::target_install_dir_name(install_version, previous_version.as_deref(), true);
+        dirs.data.join(name)
+    } else {
         AbsolutePathBuf::new(
             source.parent().and_then(Path::parent).ok_or(Error::CliBinaryNotFound)?.to_path_buf(),
         )
         .ok_or(Error::CliBinaryNotFound)?
-    } else {
-        let name =
-            install::target_install_dir_name(install_version, previous_version.as_deref(), true);
-        dirs.data.join(name)
     };
     let binary = if bundled {
         AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?
@@ -282,7 +281,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             }
         }
         let mut settings = config::load_config().await?;
-        if let Some(mode) = node_mode {
+        if let Some(mode) = node_override.or(default_mode) {
             settings.node_shim_mode = mode;
         }
         let pm_mode = manager_mode("VP_PM_MANAGER").or(default_mode);
