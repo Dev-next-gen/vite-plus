@@ -53,7 +53,7 @@ fn print_section(name: &str) {
 /// Use `" "` for informational lines with no status.
 fn print_check(status: &str, key: &str, value: &str) {
     if status.trim().is_empty() {
-        println!("  {key:<KEY_WIDTH$}{value}");
+        println!("    {key:<KEY_WIDTH$}{value}");
     } else if key.trim().is_empty() {
         println!("  {status} {value}");
     } else {

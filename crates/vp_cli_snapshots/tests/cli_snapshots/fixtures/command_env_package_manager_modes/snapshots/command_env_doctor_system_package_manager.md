@@ -27,8 +27,8 @@ PATH
   ✓ pnpx              ~/.vite-plus/bin/pnpx (vp shim)
 
 Package Manager Resolution
-  Source            system PATH
-  Version           pnpm@10.18.0
+    Source            system PATH
+    Version           pnpm@10.18.0
   ✓ PM binary         <workspace>/system-bin/pnpm
 ```
 
