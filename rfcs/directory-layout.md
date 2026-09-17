@@ -378,6 +378,8 @@ identifies Homebrew ownership. `vp upgrade` rejects changes to these installatio
 and directs users to `brew upgrade vite-plus`. Its `--check` option directs users
 to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled.
 This check does not depend on the Homebrew prefix or `brew` being on `PATH`.
+`vp env doctor` reports Homebrew ownership and the resolved CLI binary. It checks
+the public `vp` command and the user's shim directory on `PATH` separately.
 `vp implode` still removes Vite+-managed data and shell entries. Its confirmation
 distinguishes this cleanup from removal of the Homebrew package. After cleanup,
 it directs users to `brew uninstall vite-plus`. It also explains how to clear

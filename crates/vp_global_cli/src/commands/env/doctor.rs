@@ -91,6 +91,12 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: Installation
     println!("{}", style("Installation").bold());
+    if crate::homebrew::owns_current_exe() {
+        print_check(" ", "CLI source", "Homebrew");
+        if let Ok(binary) = std::env::current_exe().and_then(std::fs::canonicalize) {
+            print_check(" ", "CLI binary", &abbreviate_home(&binary.display().to_string()));
+        }
+    }
     has_errors |= !check_dirs().await;
     has_errors |= !check_shims(scope).await;
 
@@ -510,6 +516,23 @@ async fn check_path(scope: EnvScope) -> bool {
         Err(_) => return false,
     };
 
+    // The public vp can be on PATH even when the user's shim directory is not.
+    let vp_path = find_in_path("vp");
+    if let Some(path) = &vp_path {
+        print_check(
+            &style(output::CHECK).green().to_string(),
+            "vp",
+            &abbreviate_home(&path.display().to_string()),
+        );
+    } else {
+        print_check(
+            &style(output::CROSS).red().to_string(),
+            "vp",
+            &style("not in PATH").red().to_string(),
+        );
+        print_hint("Run 'vp env setup' to create the vp shim.");
+    }
+
     let path_var = std::env::var_os("PATH").unwrap_or_default();
     let paths: Vec<_> = std::env::split_paths(&path_var).collect();
 
@@ -520,11 +543,11 @@ async fn check_path(scope: EnvScope) -> bool {
     let bin_display = abbreviate_home(&bin_dir.as_path().display().to_string());
 
     if bin_in_path {
-        print_check(&style(output::CHECK).green().to_string(), "vp", "in PATH");
+        print_check(&style(output::CHECK).green().to_string(), "Shim dir", &bin_display);
     } else {
         print_check(
             &style(output::CROSS).red().to_string(),
-            "vp",
+            "Shim dir",
             &style("not in PATH").red().to_string(),
         );
         print_hint(&format!("Expected: {bin_display}"));
@@ -556,7 +579,7 @@ async fn check_path(scope: EnvScope) -> bool {
         }
     }
 
-    true
+    vp_path.is_some()
 }
 
 /// Find an executable in PATH.

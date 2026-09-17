@@ -366,6 +366,8 @@ After setup, use `vp env off` to change this preference. Commands that need miss
 
 Use Homebrew to [upgrade](/guide/upgrade#homebrew) or [remove](/guide/implode#homebrew) its package.
 
+`vp env doctor` identifies the Homebrew installation and its binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
+
 ## Use It Without a Local Package
 
 The global installation is enough for runtime, package-manager, and task-runner workflows:

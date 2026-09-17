@@ -60,6 +60,68 @@ function readSettings(env) {
   return JSON.parse(fs.readFileSync(path.join(env.VP_HOME, 'config.json'), 'utf8'));
 }
 
+function verifyDoctor(source) {
+  const directory = path.resolve('doctor');
+  const prefix = path.join(directory, 'cellar/vite-plus/0.3.2');
+  const binary = createBundle(source, prefix, 'bundled CLI');
+  const receipt = path.join(prefix, 'INSTALL_RECEIPT.json');
+  fs.writeFileSync(receipt, '{"homebrew_version":"7.0.2"}');
+  const env = createEnvironment(directory);
+  const publicBin = path.join(directory, 'brew/bin');
+  const shimBin = path.join(env.VP_HOME, 'bin');
+  const systemBin = path.join(directory, 'system/bin');
+  fs.mkdirSync(publicBin, { recursive: true });
+  fs.symlinkSync(binary, path.join(publicBin, 'vp'));
+  run(path.join(publicBin, 'vp'), ['--help'], directory, {
+    ...env,
+    VP_NODE_MANAGER: 'no',
+    VP_PM_MANAGER: 'no',
+  });
+
+  const cases = [
+    { label: 'Homebrew with shims on PATH', paths: [shimBin, publicBin, systemBin], status: 0 },
+    { label: 'Homebrew without shims on PATH', paths: [publicBin, systemBin], status: 1 },
+    {
+      label: 'Missing vp in the shim directory',
+      paths: [shimBin, systemBin],
+      status: 1,
+      missingVp: true,
+    },
+    {
+      label: 'External package without a Homebrew receipt',
+      paths: [shimBin, publicBin, systemBin],
+      status: 0,
+      external: true,
+    },
+  ];
+  for (const { label, paths, status, missingVp, external } of cases) {
+    const shim = path.join(shimBin, 'vp');
+    if (missingVp) fs.renameSync(shim, `${shim}.hidden`);
+    if (external) fs.unlinkSync(receipt);
+    let result;
+    try {
+      result = spawnSync(binary, ['env', 'doctor', 'node'], {
+        cwd: directory,
+        env: { ...env, PATH: paths.join(path.delimiter) },
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+    } finally {
+      if (missingVp) fs.renameSync(`${shim}.hidden`, shim);
+    }
+    assert.equal(result.status, status, result.error?.message ?? result.stdout + result.stderr);
+    const text = result.stdout.replace(/\u001b\[[0-9;]*m/g, '');
+    assert.equal(/CLI source\s+Homebrew/.test(text), !external, text);
+    console.log(label);
+    console.log(
+      text
+        .split('\n')
+        .filter((line) => /CLI source|CLI binary|[✓✗] (vp|Shim dir)\s/.test(line))
+        .join('\n'),
+    );
+  }
+}
+
 function verifyPreferences(source) {
   for (const [label, choices] of [
     ['managed', managed],
@@ -137,6 +199,10 @@ function main() {
   const source = path.join(process.env.VP_HOME, 'bin/vp');
   if (action === 'preferences') {
     verifyPreferences(source);
+    return;
+  }
+  if (action === 'doctor') {
+    verifyDoctor(source);
     return;
   }
   assert.equal(action, 'replacement');
