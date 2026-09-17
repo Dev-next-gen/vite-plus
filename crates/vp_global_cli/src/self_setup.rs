@@ -171,9 +171,15 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     }
     let previous_install = if deploy { previous_install()? } else { None };
     let node_override = manager_mode("VP_NODE_MANAGER");
+    // A package upgrade can change the executable path or expire its receipt.
+    // Preferences belong to the user, not to that particular binary.
+    let configured = bundled && config::get_config_path()?.as_path().is_file();
     // A supplied Node choice skips the combined prompt; upgrades preserve all saved choices.
-    let default_mode =
-        if in_place || node_override.is_some() { None } else { management_default()? };
+    let default_mode = if in_place || configured || node_override.is_some() {
+        None
+    } else {
+        management_default()?
+    };
     let node_mode = if in_place { None } else { node_override.or(default_mode) };
     let version = env!("CARGO_PKG_VERSION");
     let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER)

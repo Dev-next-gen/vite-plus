@@ -30,6 +30,19 @@ after = [
 ]
 
 [[case]]
+name = "command_self_setup_external_replacement"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify-refresh.mjs", "replacement"]]
+
+[[case]]
+name = "command_self_setup_external_preferences"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "verify-refresh.mjs", "preferences"]]
+
+[[case]]
 name = "command_self_setup_external_bare"
 vp = "global"
 skip-platforms = ["windows"]

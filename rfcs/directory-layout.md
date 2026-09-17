@@ -373,6 +373,14 @@ the user's shell, preferences, and shims without copying the CLI, installing
 its dependencies, changing `current`, or writing a marker in the external
 prefix. Later launches with a matching receipt use the external CLI directly.
 
+Unix shims use a public `vp` entrypoint that resolves to the same binary when
+one is available through `PATH`, the explicit invocation, or existing shims.
+They retain that path instead of resolving it to a versioned package directory.
+Aliases through the user's shim directory are excluded to prevent link cycles.
+Thus, a package-manager upgrade can replace and remove the old prefix without
+breaking saved shim paths. JavaScript resolution still uses the real binary's
+prefix. With no public entrypoint, shims target the external binary directly.
+
 An external binary without this bundled CLI installs a managed copy under
 `<DATA>`. Later launches use the receipt to execute that copy. The copy must
 still have its completion marker. Windows uses this managed layout even when
@@ -380,6 +388,9 @@ the external prefix contains JavaScript, because its trampolines require it.
 
 Setup writes a receipt only after it succeeds. A changed source, a missing
 target, a missing managed marker, or an invalid receipt causes setup to retry.
+For bundled installations with an existing user configuration, this retry
+preserves management preferences without prompting. Explicit management
+variables can still change the preferences during setup.
 When a failed attempt leaves a read-only binary copy, the retry replaces that
 copy atomically. It does not open the old copy for writing.
 

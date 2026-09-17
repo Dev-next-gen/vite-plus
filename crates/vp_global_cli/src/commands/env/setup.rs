@@ -30,6 +30,9 @@ use crate::{
     help,
 };
 
+#[cfg(unix)]
+mod unix;
+
 /// Shells that get a generated `<CONFIG>/env.*` setup script.
 #[derive(Clone, Copy, Debug)]
 enum EnvShell {
@@ -292,16 +295,17 @@ async fn setup_vp_wrapper(
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
 ) -> Result<std::path::PathBuf, Error> {
+    let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
     let current_vp = crate::commands::global::install::package_shim_target();
     if tokio::fs::try_exists(&current_vp).await.unwrap_or(false) {
         let current_vp_canon = tokio::fs::canonicalize(&current_vp).await.ok();
-        let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
         if current_vp_canon.is_some() && current_vp_canon == current_exe_canon {
             return Ok(current_vp.as_path().to_path_buf());
         }
     }
 
-    Ok(current_exe.to_path_buf())
+    let binary = current_exe_canon.unwrap_or_else(|| current_exe.to_path_buf());
+    Ok(unix::external_shim_target(current_exe).unwrap_or(binary))
 }
 
 /// Create a single default tool shim.
