@@ -1,0 +1,53 @@
+[[case]]
+name = "command_self_setup_external_bundled"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external/bin", "system/bin", "home"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/bin/vp"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/js_runtime/node/22.18.0/bin/node", "system/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system/bin/node"], snapshot = false },
+  { argv = ["vpt", "write-file", "external/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.3.2"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "external/node_modules/vite-plus/dist/bin.js", "console.log('external bundled CLI: ' + process.argv.slice(2).join(' '));"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external/bin/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external/bin"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external"], snapshot = false },
+  { argv = ["./external/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"], ["VP_PM_MANAGER", "no"]], comment = "A read-only package prefix needs neither a marker nor registry access", snapshot = false },
+  ["vpt", "stat-file", "external/bin/.vp-setup-complete", "--assert", "missing"],
+  ["vpt", "stat-file", "home/current", "--assert", "missing"],
+  ["vpt", "stat-file", "home/self-setup", "--assert", "dir"],
+  { argv = ["./external/bin/vp", "sync-versions", "--json"], envs = [["VP_HOME", "${workspace}/home"], ["PATH", "${workspace}/system/bin${PATH_SEPARATOR}${PATH}"]], comment = "A later command uses the package manager's bundled JavaScript without another setup prompt" },
+  { argv = ["./external/bin/vp", "env", "off"], envs = [["VP_HOME", "${workspace}/home"]], snapshot = false },
+  { argv = ["./external/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "yes"]], comment = "Later invocations preserve the user's saved management choices", snapshot = false },
+  ["vpt", "print-file", "home/config.json"],
+  { argv = ["./home/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"]], comment = "The user shim also recognizes the external installation", snapshot = false },
+  ["vpt", "stat-file", "home/bin/vp", "--assert", "symlink"],
+]
+after = [
+  ["vpt", "chmod", "755", "external"],
+  ["vpt", "chmod", "755", "external/bin"],
+]
+
+[[case]]
+name = "command_self_setup_external_bare"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SKIP_DEPS_INSTALL = "1", VP_VERSION = "external-test", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "home/external-test/bin"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external/vp"], snapshot = false },
+  { argv = ["vpt", "cp", "external/vp", "home/external-test/bin/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "home/external-test/bin/vp"], comment = "An interrupted bootstrap left a read-only binary before activation", snapshot = false },
+  { argv = ["./external/vp", "--help"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"]], comment = "Retry replaces the incomplete copy and finishes setup", snapshot = false },
+  ["vpt", "stat-file", "home/current/bin/.vp-setup-complete", "--assert", "file"],
+  ["vpt", "stat-file", "external/.vp-setup-complete", "--assert", "missing"],
+  { argv = ["./external/vp", "env", "off"], envs = [["VP_HOME", "${workspace}/home"]], comment = "The external binary reuses its completed installation" },
+  { argv = ["./external/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "yes"]], snapshot = false },
+  ["vpt", "stat-file", "home/.previous-version", "--assert", "missing"],
+  ["vpt", "print-file", "home/config.json"],
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"], ["VP_SELF_SETUP_SHELL", "sh"]], comment = "An explicit installer handoff still reinstalls the same version", snapshot = false },
+  ["vpt", "print-file", "home/.previous-version"],
+  ["vpt", "stat-file", "home/current/bin/.vp-setup-complete", "--assert", "file"],
+]
