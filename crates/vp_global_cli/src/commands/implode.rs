@@ -152,7 +152,9 @@ fn print_homebrew_uninstall_notice() {
     output::note(
         "The Homebrew package remains installed. Run `brew uninstall vite-plus` to remove it.",
     );
-    output::note("Running `vp` again before uninstalling the package starts setup again.");
+    output::note(
+        "To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.",
+    );
 }
 
 /// Remove the shim files vite-plus owns from the bin directory.

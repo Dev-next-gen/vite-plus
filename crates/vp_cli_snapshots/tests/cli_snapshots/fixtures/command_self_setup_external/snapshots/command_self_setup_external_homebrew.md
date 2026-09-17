@@ -114,7 +114,7 @@ Cleanup removes user data and leaves the Homebrew package installed
 
 ✓ Vite+ removed its managed files and shell entries from your system.
 note: The Homebrew package remains installed. Run `brew uninstall vite-plus` to remove it.
-note: Running `vp` again before uninstalling the package starts setup again.
+note: To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.
 note: Restart your terminal to apply shell changes.
 ```
 

@@ -380,8 +380,8 @@ to `brew outdated vite-plus`. Automatic npm update checks and notices are disabl
 This check does not depend on the Homebrew prefix or `brew` being on `PATH`.
 `vp implode` still removes Vite+-managed data and shell entries. Its confirmation
 distinguishes this cleanup from removal of the Homebrew package. After cleanup,
-it directs users to `brew uninstall vite-plus` and explains that another `vp`
-invocation would start setup again.
+it directs users to `brew uninstall vite-plus`. It also explains how to clear
+cached shell command paths before another `vp` invocation starts setup again.
 
 Unix shims use a public `vp` entrypoint that resolves to the same binary when
 one is available through `PATH`, the explicit invocation, or existing shims.
