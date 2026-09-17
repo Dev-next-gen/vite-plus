@@ -38,6 +38,8 @@ function run(binary, args, options = {}) {
 
 function buildEnvironment(state) {
   const env = { ...process.env, HOME: state.home, PATH: state.path };
+  // Only the candidate formula needs a local tap; resolve core dependencies via the API.
+  delete env.HOMEBREW_NO_INSTALL_FROM_API;
   if (state.ci === undefined) {
     delete env.CI;
   } else {
@@ -51,7 +53,6 @@ function buildEnvironment(state) {
   return {
     ...env,
     HOMEBREW_NO_AUTO_UPDATE: '1',
-    HOMEBREW_NO_INSTALL_FROM_API: '1',
     HOMEBREW_NO_INSTALL_CLEANUP: '1',
     HOMEBREW_NO_ASK: '1',
   };
@@ -149,7 +150,6 @@ async function prepare() {
     JSON.stringify({ sha, coreSha, sha256, version: state.version, upstream }, null, 2),
   );
   fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
-  brewLogged(state, 'tap-core', ['tap', '--force', 'homebrew/core']);
   brew(state, ['tap-new', '--no-git', tap]);
   fs.copyFileSync(path.join(artifacts, 'vite-plus-1.rb'), state.formulaPath);
   if (spawnSync(state.brew, ['command', 'trust']).status === 0) {

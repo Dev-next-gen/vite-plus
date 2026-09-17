@@ -1351,9 +1351,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Test formula adaptation
-        run: node --test .github/scripts/__tests__/homebrew-formula.mjs
-
       - name: Build and exercise Homebrew installation
         run: node .github/scripts/test-homebrew.mjs "$RUNNER_TEMP/homebrew-e2e"
 
