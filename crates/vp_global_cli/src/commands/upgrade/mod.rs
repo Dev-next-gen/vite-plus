@@ -41,6 +41,20 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
+    if crate::homebrew::owns_current_exe() {
+        if options.check && !options.rollback {
+            if !options.silent {
+                output::info(
+                    "Homebrew manages this installation. Run `brew outdated vite-plus` to check for updates.",
+                );
+            }
+            return Ok(ExitStatus::default());
+        }
+        return Err(Error::Upgrade(
+            "Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.".into(),
+        ));
+    }
+
     let config = vp_shared::EnvConfig::get();
     let install_dir = &config.dirs.data;
 

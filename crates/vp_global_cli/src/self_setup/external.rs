@@ -72,7 +72,10 @@ impl SetupState {
             receipt.binary != self.source.path
                 && receipt.binary.parent().is_some_and(|bin| bin.join(SELF_SETUP_MARKER).is_file())
         };
-        Ok(complete.then(|| AbsolutePathBuf::new(receipt.binary)).flatten())
+        if !complete {
+            return Ok(None);
+        }
+        Ok(AbsolutePathBuf::new(receipt.binary))
     }
 
     pub(super) async fn save(self, binary: &AbsolutePath) -> Result<(), Error> {

@@ -297,11 +297,10 @@ pub(crate) async fn resolve_unix_vp_shim_target(
 ) -> Result<std::path::PathBuf, Error> {
     let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
     let current_vp = crate::commands::global::install::package_shim_target();
-    if tokio::fs::try_exists(&current_vp).await.unwrap_or(false) {
-        let current_vp_canon = tokio::fs::canonicalize(&current_vp).await.ok();
-        if current_vp_canon.is_some() && current_vp_canon == current_exe_canon {
-            return Ok(current_vp.as_path().to_path_buf());
-        }
+    if let Some(binary) = &current_exe_canon
+        && tokio::fs::canonicalize(&current_vp).await.is_ok_and(|target| target == *binary)
+    {
+        return Ok(current_vp.as_path().to_path_buf());
     }
 
     let binary = current_exe_canon.unwrap_or_else(|| current_exe.to_path_buf());

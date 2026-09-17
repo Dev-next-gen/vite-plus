@@ -139,6 +139,7 @@ fn checks_disabled() -> bool {
     std::env::var_os("VP_NO_UPDATE_CHECK").is_some()
         || vp_shared::EnvConfig::get().is_ci
         || std::env::var_os("VP_CLI_TEST").is_some()
+        || crate::homebrew::owns_current_exe()
 }
 
 fn should_check(cache: Option<&UpgradeCheckCache>, current_version: &str, now: u64) -> bool {

@@ -64,3 +64,35 @@ steps = [
   ["vpt", "print-file", "home/.previous-version"],
   ["vpt", "stat-file", "home/current/bin/.vp-setup-complete", "--assert", "file"],
 ]
+
+[[case]]
+name = "command_self_setup_external_homebrew"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["VP_CLI_TEST", "VP_NO_UPDATE_CHECK", "CI"]
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "brew-prefix/bin", "home"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "brew-prefix/bin/vp"], snapshot = false },
+  { argv = ["vpt", "write-file", "brew-prefix/INSTALL_RECEIPT.json", '{"homebrew_version":"7.0.2","source":{"tap":"fengmk2/core"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "brew-prefix/node_modules/vite-plus/package.json", '{"name":"vite-plus"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "brew-prefix/node_modules/vite-plus/dist/bin.js", "console.log('bundled CLI');"], snapshot = false },
+  { argv = ["./brew-prefix/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"], ["VP_PM_MANAGER", "no"]], snapshot = false },
+  { argv = ["./home/bin/vp", "upgrade"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--force"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "0.0.1", "--registry", "http://127.0.0.1:9"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--rollback"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--silent"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--check"], envs = [["VP_HOME", "${workspace}/home"]] },
+  { argv = ["./home/bin/vp", "upgrade", "--check", "--silent"], envs = [["VP_HOME", "${workspace}/home"]] },
+  { argv = ["./home/bin/vp", "upgrade", "--background-check"], envs = [["VP_HOME", "${workspace}/home"]] },
+  { argv = ["./home/bin/vp", "env", "off"], envs = [["VP_HOME", "${workspace}/home"]] },
+  ["vpt", "stat-file", "home/current", "--assert", "missing"],
+  ["vpt", "stat-file", "home/cache/upgrade-check.json", "--assert", "missing"],
+  ["vpt", "stat-file", "brew-prefix/bin/.vp-setup-complete", "--assert", "missing"],
+  { argv = ["./home/bin/vp", "implode", "--yes"], envs = [["VP_HOME", "${workspace}/home"]], comment = "Cleanup removes user data and leaves the Homebrew package installed" },
+  ["vpt", "stat-file", "home", "--assert", "missing"],
+  ["vpt", "stat-file", "brew-prefix/bin/vp", "--assert", "file"],
+  ["vpt", "stat-file", "brew-prefix/INSTALL_RECEIPT.json", "--assert", "file"],
+  ["vpt", "stat-file", "brew-prefix/node_modules/vite-plus/dist/bin.js", "--assert", "file"],
+]

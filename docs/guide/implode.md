@@ -31,4 +31,6 @@ vp implode
 brew uninstall vite-plus
 ```
 
+The confirmation prompt explains that the Homebrew package will remain installed. After cleanup, `vp implode` directs you to `brew uninstall vite-plus`.
+
 Running `vp` again before removing the Homebrew package starts first-run setup again.

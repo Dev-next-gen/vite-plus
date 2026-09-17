@@ -38,7 +38,11 @@ Homebrew owns its installed binary and JavaScript package. Update them with:
 brew upgrade vite-plus
 ```
 
-For installations managed by Vite+, use the commands below. Running `vp upgrade` from a Homebrew installation installs a separate Vite+-managed version; it does not update the Homebrew package.
+`vp upgrade` detects Homebrew installations and directs you to this command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. Use Homebrew to manage these installations.
+
+`vp upgrade --check` directs you to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled for Homebrew installations.
+
+For installations managed by Vite+, use the commands below.
 
 ```bash
 vp upgrade                        # upgrade to the latest version

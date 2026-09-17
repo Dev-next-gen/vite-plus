@@ -117,10 +117,11 @@ fn has_bundled_package(binary: &Path) -> bool {
 }
 
 fn local_install_version() -> Option<String> {
-    std::env::var_os("VP_SKIP_DEPS_INSTALL")
-        .is_some_and(|value| !value.is_empty())
-        .then(|| std::env::var("VP_VERSION").ok())
-        .flatten()
+    let skip_deps = std::env::var_os("VP_SKIP_DEPS_INSTALL")?;
+    if skip_deps.is_empty() {
+        return None;
+    }
+    std::env::var("VP_VERSION").ok()
 }
 
 // Only successful setup emits executable output; logs use stderr in this mode.
@@ -280,8 +281,6 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
                 ));
             }
         }
-    }
-    if !in_place {
         let mut settings = config::load_config().await?;
         if let Some(mode) = node_mode {
             settings.node_shim_mode = mode;

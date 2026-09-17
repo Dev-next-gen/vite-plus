@@ -373,6 +373,16 @@ the user's shell, preferences, and shims without copying the CLI, installing
 its dependencies, changing `current`, or writing a marker in the external
 prefix. Later launches with a matching receipt use the external CLI directly.
 
+The Homebrew `INSTALL_RECEIPT.json` beside the resolved binary's `bin` directory
+identifies Homebrew ownership. `vp upgrade` rejects changes to these installations
+and directs users to `brew upgrade vite-plus`. Its `--check` option directs users
+to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled.
+This check does not depend on the Homebrew prefix or `brew` being on `PATH`.
+`vp implode` still removes Vite+-managed data and shell entries. Its confirmation
+distinguishes this cleanup from removal of the Homebrew package. After cleanup,
+it directs users to `brew uninstall vite-plus` and explains that another `vp`
+invocation would start setup again.
+
 Unix shims use a public `vp` entrypoint that resolves to the same binary when
 one is available through `PATH`, the explicit invocation, or existing shims.
 They retain that path instead of resolving it to a versioned package directory.
