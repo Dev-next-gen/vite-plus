@@ -105,6 +105,18 @@ async function prepare() {
   const tapPath = brew(state, ['--repository', tap]);
   assert(!fs.existsSync(tapPath), `Refusing to replace existing tap ${tapPath}`);
   state.prefix = brew(state, ['--prefix']);
+  // Runner images install pnpm through npm, which blocks Homebrew's pnpm dependency.
+  for (const name of ['pnpm', 'pnpx']) {
+    const link = path.join(state.prefix, 'bin', name);
+    if (
+      fs.lstatSync(link, { throwIfNoEntry: false })?.isSymbolicLink() &&
+      path.resolve(path.dirname(link), fs.readlinkSync(link)) ===
+        path.join(state.prefix, 'lib/node_modules/pnpm/bin', `${name}.cjs`)
+    ) {
+      console.log(`Removing npm-installed link ${link}`);
+      fs.unlinkSync(link);
+    }
+  }
   state.formulaPath = path.join(tapPath, 'Formula/vite-plus.rb');
   const sha = run('git', ['rev-parse', 'HEAD'], { cwd: repo }).trim();
   const coreSha = run('git', [
