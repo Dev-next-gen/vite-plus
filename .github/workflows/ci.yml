@@ -1337,6 +1337,39 @@ jobs:
             echo ""
           done
 
+  homebrew-install-e2e:
+    name: Homebrew install E2E test (macOS ARM64)
+    if: >-
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'test: install-e2e')
+    runs-on: namespace-profile-mac-default
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test formula adaptation
+        run: node --test .github/scripts/__tests__/homebrew-formula.mjs
+
+      - name: Build and exercise Homebrew installation
+        run: node .github/scripts/test-homebrew.mjs "$RUNNER_TEMP/homebrew-e2e"
+
+      - name: Upload Homebrew diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: homebrew-install-e2e
+          path: |
+            ${{ runner.temp }}/homebrew-e2e/*.log
+            ${{ runner.temp }}/homebrew-e2e/*.json
+            ${{ runner.temp }}/homebrew-e2e/*.rb
+            ${{ runner.temp }}/homebrew-e2e/phase.txt
+            ${{ runner.temp }}/homebrew-e2e/*-build/**
+          retention-days: 7
+
   install-e2e-test-sfw:
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
     env:
@@ -1496,6 +1529,7 @@ jobs:
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
       # `contains(needs.*.result, 'failure')` ignores "skipped" results.
       - install-e2e-test
+      - homebrew-install-e2e
       - install-e2e-test-sfw
     steps:
       - run: exit 1

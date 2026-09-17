@@ -171,6 +171,22 @@ gh extension install github/gh-stack
 
 Stacked pull requests require all branches to be in this repository; GitHub does not support cross-fork stacks ([reference](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)). If you contribute from a fork, split large work into a sequence of standalone PRs instead.
 
+## Homebrew installation checks
+
+Add the `test: install-e2e` label to a pull request to run the Homebrew E2E job on macOS ARM64. New commits rerun the job while the label remains. Unlabeled pull requests and pushes to `main` skip this job.
+
+The job adapts the current official formula to build the tested commit and its pinned upstream resources. It checks first-run setup, bundled commands without npm access, management preferences, diagnostics, and removal. It also installs two formula revisions to check real `brew upgrade` and `brew cleanup` behavior, including cached Bash commands and saved shim paths.
+
+The `homebrew-install-e2e` artifact contains the source revisions, generated formulae, command output, and Homebrew build logs. Its `phase.txt` identifies the last build or test phase. A formula adaptation failure means the official formula changed and the adapter needs review.
+
+To run the same checks on a disposable Mac with Homebrew and Node.js:
+
+```bash
+node .github/scripts/test-homebrew.mjs /absolute/path/to/homebrew-e2e-results
+```
+
+The script requires a committed checkout and refuses to run if `vite-plus` or its temporary `voidzero-e2e/install` tap already exists. Successful runs remove the test package and tap.
+
 ## Verified Commits
 
 All commits in PR branches should be GitHub-verified so reviewers can confirm commit authenticity.
