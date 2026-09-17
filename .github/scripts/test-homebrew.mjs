@@ -1,5 +1,6 @@
 // Real Homebrew lifecycle test. Run on a disposable Mac with no installed vite-plus:
 // node .github/scripts/test-homebrew.mjs /absolute/path/to/artifacts
+// Requires Homebrew and Node.js. CI runs with the test: install-e2e PR label.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
