@@ -100,6 +100,8 @@ async function prepare() {
     !brew(state, ['list', '--formula']).split('\n').includes('vite-plus'),
     'Use a disposable runner: vite-plus is already installed',
   );
+  // Runner images can carry an older Homebrew that cannot load current formulae.
+  brewLogged(state, 'update', ['update']);
   const tapPath = brew(state, ['--repository', tap]);
   assert(!fs.existsSync(tapPath), `Refusing to replace existing tap ${tapPath}`);
   state.prefix = brew(state, ['--prefix']);
