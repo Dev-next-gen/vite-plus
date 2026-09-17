@@ -364,7 +364,7 @@ VP_NODE_MANAGER=no VP_PM_MANAGER=no vp help
 
 After setup, use `vp env off` to change this preference. Commands that need missing runtimes or project dependencies can still download them.
 
-Use Homebrew to [upgrade](/guide/upgrade#global-vp) or [remove](/guide/implode#homebrew) its package.
+Use Homebrew to [upgrade](/guide/upgrade#homebrew) or [remove](/guide/implode#homebrew) its package.
 
 ## Use It Without a Local Package
 
