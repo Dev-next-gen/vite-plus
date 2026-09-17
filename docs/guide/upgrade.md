@@ -1,6 +1,6 @@
 # Upgrading Vite+
 
-Use `vp upgrade` to update the global `vp` binary. To update the local `vite-plus` package in a project, see [Update Vite+](/guide/upgrade-project).
+Use `vp upgrade` to update a Vite+-managed global `vp` binary. For a Homebrew installation, use `brew upgrade vite-plus`. To update the local `vite-plus` package in a project, see [Update Vite+](/guide/upgrade-project).
 
 ## Overview
 
@@ -31,6 +31,14 @@ vp toolchain --global
 `vp why <package>` shows the dependency graph from the package manager. It cannot show code bundled into `@voidzero-dev/vite-plus-core`. It also cannot show engines compiled into Vite+. Use `vp toolchain` to show those versions and relationships.
 
 ## Global `vp`
+
+Homebrew owns its installed binary and JavaScript package. Update them with:
+
+```bash
+brew upgrade vite-plus
+```
+
+For installations managed by Vite+, use the commands below. Running `vp upgrade` from a Homebrew installation installs a separate Vite+-managed version; it does not update the Homebrew package.
 
 ```bash
 vp upgrade                        # upgrade to the latest version

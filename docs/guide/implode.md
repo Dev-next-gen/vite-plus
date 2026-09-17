@@ -1,6 +1,6 @@
 # Removing Vite+
 
-Use `vp implode` to remove the [global `vp` installation](/guide/global-cli) and all related Vite+ data from your machine. It does not remove `vite-plus` dependencies from projects.
+Use `vp implode` to remove the Vite+-managed [global `vp` installation](/guide/global-cli) and related user data from your machine. It does not remove `vite-plus` dependencies from projects or packages owned by Homebrew.
 
 ## Overview
 
@@ -21,3 +21,14 @@ Skip the confirmation prompt with:
 ```bash
 vp implode --yes
 ```
+
+## Homebrew
+
+Run `vp implode` first to remove Vite+-managed runtimes, global packages, configuration, shims, and shell entries. Then remove the Homebrew package:
+
+```bash
+vp implode
+brew uninstall vite-plus
+```
+
+Running `vp` again before removing the Homebrew package starts first-run setup again.

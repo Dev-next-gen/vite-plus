@@ -350,6 +350,20 @@ For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.
 
 :::
 
+### Homebrew
+
+For a Homebrew installation, the first `vp` command sets up your shell, shims, and environment-management preferences. It reuses Homebrew's binary and bundled JavaScript. Setup stores its completion state in your user directories and does not need write access to the Homebrew prefix.
+
+Later commands reuse that setup while the installed binary remains unchanged. To prefer your existing Node.js and package managers during the first run, use:
+
+```bash
+VP_NODE_MANAGER=no VP_PM_MANAGER=no vp help
+```
+
+After setup, use `vp env off` to change this preference. Commands that need missing runtimes or project dependencies can still download them.
+
+Use Homebrew to [upgrade](/guide/upgrade#global-vp) or [remove](/guide/implode#homebrew) its package.
+
 ## Use It Without a Local Package
 
 The global installation is enough for runtime, package-manager, and task-runner workflows:
