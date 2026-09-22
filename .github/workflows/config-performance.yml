@@ -1,0 +1,122 @@
+name: Config Performance
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'bench/config-performance/**'
+      - 'packages/**'
+      - 'crates/**'
+      - '.github/actions/**'
+      - '.github/workflows/config-performance.yml'
+      - '.node-version'
+      - '.cargo/**'
+      - 'Cargo.*'
+      - 'rust-toolchain.toml'
+      - 'pnpm-*.yaml'
+      - 'package.json'
+  push:
+    branches: [main]
+    paths:
+      - 'bench/config-performance/**'
+      - 'packages/**'
+      - 'crates/**'
+      - '.github/actions/**'
+      - '.github/workflows/config-performance.yml'
+      - '.node-version'
+      - '.cargo/**'
+      - 'Cargo.*'
+      - 'rust-toolchain.toml'
+      - 'pnpm-*.yaml'
+      - 'package.json'
+  schedule:
+    - cron: '23 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: config-performance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  benchmark:
+    name: Config loading benchmark
+    runs-on: namespace-profile-linux-x64-default
+    timeout-minutes: 30
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: config-performance
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main
+      - uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      # Prefer a successful main run. Before this workflow reaches main, use
+      # an earlier successful run of this PR so draft iterations get comparisons.
+      - name: Find previous measurements
+        id: baseline
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const repo = context.repo;
+            const current = await github.rest.actions.getWorkflowRun({ ...repo, run_id: context.runId });
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...repo, workflow_id: current.data.workflow_id, status: 'success', per_page: 100,
+            });
+            const runs = data.workflow_runs.filter(run => run.id !== context.runId);
+            const main = runs.filter(run => run.head_branch === 'main' && run.event !== 'pull_request');
+            const pr = context.payload.pull_request;
+            const previousPR = pr ? runs.filter(run =>
+              run.event === 'pull_request' && run.head_branch === pr.head.ref &&
+              run.head_repository?.full_name === pr.head.repo.full_name
+            ) : [];
+            for (const run of [...main, ...previousPR]) {
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ ...repo, run_id: run.id });
+              if (artifacts.data.artifacts.some(artifact => artifact.name === 'config-performance' && !artifact.expired)) {
+                core.setOutput('run-id', String(run.id));
+                core.info(`Using baseline from ${run.html_url}`);
+                return;
+              }
+            }
+            core.info('No previous measurements; this run establishes a baseline.');
+
+      - name: Download previous measurements
+        if: steps.baseline.outputs.run-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: config-performance
+          path: ${{ runner.temp }}/config-performance-baseline
+          run-id: ${{ steps.baseline.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Run benchmark
+        env:
+          BASELINE_RUN: ${{ steps.baseline.outputs.run-id }}
+        run: |
+          args=()
+          if [[ -n "$BASELINE_RUN" ]]; then
+            args+=(--baseline "$RUNNER_TEMP/config-performance-baseline/results.json")
+          fi
+          node bench/config-performance/run.ts --output "$RUNNER_TEMP/config-performance" "${args[@]}"
+
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-performance
+          path: ${{ runner.temp }}/config-performance
+          if-no-files-found: warn
+          retention-days: 90
+          overwrite: true
