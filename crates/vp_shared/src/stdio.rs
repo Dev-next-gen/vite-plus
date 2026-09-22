@@ -41,6 +41,32 @@ fn ensure_blocking_fd(fd: std::os::fd::BorrowedFd<'_>) {
 #[cfg(not(unix))]
 pub fn ensure_blocking_stdio() {}
 
+/// Restore SIGPIPE to its default disposition so that piped commands exit
+/// quietly on a broken pipe instead of panicking and aborting.
+///
+/// Rust ignores SIGPIPE by default (it installs `SIG_IGN` at startup). When a
+/// `println!` or `write!` call hits EPIPE the standard library's `Stdout`
+/// lock panics, and because the release profile sets `panic = "abort"` the
+/// process terminates with SIGABRT — leaving a systemd coredump rather than
+/// the silent exit that standard Unix tools produce. Restoring `SIG_DFL` here
+/// makes `vp` terminate quietly with SIGPIPE (exit 141) when its output is
+/// piped to a reader that exits early, matching the behaviour of `grep`,
+/// `ripgrep`, and other well-behaved CLI tools.
+///
+/// This must be called before any threads are spawned.
+#[cfg(unix)]
+pub fn restore_sigpipe_default() {
+    use nix::sys::signal::{SigHandler, Signal, signal};
+    // SAFETY: called before any other threads are spawned; signal(2) is
+    // async-signal-safe, and SIG_DFL has no registered handler to race with.
+    unsafe {
+        signal(Signal::SIGPIPE, SigHandler::SigDfl).ok();
+    }
+}
+
+#[cfg(not(unix))]
+pub fn restore_sigpipe_default() {}
+
 #[cfg(all(test, unix))]
 mod tests {
     use std::os::{fd::AsFd, unix::net::UnixStream};

@@ -369,6 +369,11 @@ fn dump_dirs_from_env_config() -> bool {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // Restore SIGPIPE to its default disposition so piped commands exit quietly
+    // on a broken pipe instead of panicking and producing SIGABRT. Must run
+    // before any output is written. See vp_shared::restore_sigpipe_default.
+    vp_shared::restore_sigpipe_default();
+
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
     if env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK).is_some() {
         println!("vite-plus-self-setup-v1");

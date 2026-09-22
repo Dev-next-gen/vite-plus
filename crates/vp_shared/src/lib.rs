@@ -46,6 +46,6 @@ pub use path_env::{
     PrependOptions, ToolPathEnv, ensure_windows_pathext, prepend_tools_to_path_env,
 };
 pub use process::exit_code_from_status;
-pub use stdio::ensure_blocking_stdio;
+pub use stdio::{ensure_blocking_stdio, restore_sigpipe_default};
 pub use tls::ensure_tls_provider;
 pub use tracing::init_tracing;
