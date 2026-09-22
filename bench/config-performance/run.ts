@@ -274,9 +274,17 @@ try {
   const baseline = values.baseline
     ? (JSON.parse(readFileSync(values.baseline, 'utf8')) as BenchmarkReport)
     : undefined;
-  const { regressions, markdown } = compareReports(report, baseline);
+  const { regressions, notableChanges, markdown } = compareReports(report, baseline);
   writeFileSync(path.join(output, 'results.json'), `${JSON.stringify(report, null, 2)}\n`);
   writeFileSync(path.join(output, 'summary.md'), markdown);
+  const comment =
+    notableChanges.length > 0
+      ? `${notableChanges.length} case(s) changed by more than ±5% in median time. Negative changes are faster; positive changes are slower.\n\n${markdown}`
+      : '';
+  writeFileSync(path.join(output, 'comment.md'), comment);
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, 'report-ready=true\n');
+  }
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
   }

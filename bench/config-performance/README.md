@@ -6,7 +6,7 @@ Build the checkout as described in [CONTRIBUTING.md](../../CONTRIBUTING.md), the
 node bench/config-performance/run.ts
 ```
 
-Results go to `tmp/config-performance/results.json` and `summary.md`. To compare with an earlier result on the same machine and Node version:
+Results go to `tmp/config-performance/results.json` and `summary.md`. The summary shows baseline → current values for median and p95, plus the absolute and percentage median change. To compare with an earlier result on the same machine and Node version:
 
 ```sh
 node bench/config-performance/run.ts --baseline previous-results.json
@@ -20,9 +20,13 @@ Config evaluations are measured in separate runs. Synchronous log writes do not 
 
 The benchmark uses temporary projects outside the checkout so ancestor config discovery cannot find the repository's config. It runs the same Node executable in staged tasks and tool children. It uses a separate Node compile-cache directory and removes fixtures after completion. Warmups make this a measurement of fresh-process startup with warm filesystem and compile caches, not a cold-disk benchmark.
 
-The [Config Performance workflow](../../.github/workflows/config-performance.yml) runs on relevant PR updates, relevant pushes to `main`, daily, and on manual dispatch. Draft PRs run normally. The daily schedule becomes active after the workflow reaches `main`.
+The [Config Performance workflow](../../.github/workflows/config-performance.yml) runs only when a relevant PR opens, updates, or reopens. Draft PRs run normally.
 
-CI retains JSON samples and Markdown reports for 90 days. It compares with the latest available successful `main` run. Before the workflow reaches `main`, reruns can use their previous successful attempt, and PR updates can use an earlier successful run of the same branch. The first run records a baseline. Workload, Node version, operating system, architecture, CPU model, and CPU count must match for a timing comparison; a mismatch is reported explicitly.
+CI retains JSON samples and Markdown reports for 90 days. Stacked PRs prefer measurements from their base branch. Otherwise, reruns can use their previous successful attempt, and PR updates can use an earlier successful run of the same branch. The first run records a baseline. Workload, Node version, operating system, architecture, CPU model, and CPU count must match for a timing comparison; a mismatch is reported explicitly.
+
+If any comparable case's median changes by more than +5% or −5%, CI posts or updates one PR comment with the full comparison and a link to the run. Faster and slower results both trigger a comment, without an absolute-time threshold. Exactly ±5% does not trigger a comment. CI removes its previous comment when no case exceeds this threshold or comparison is unavailable. Missing or incompatible baselines do not trigger comments. Fork PRs retain the report in the job summary because their GitHub token cannot write comments.
+
+The notification threshold is separate from the failure threshold below. A timing regression still produces a comment if the benchmark fails. `comment.md` contains the comment text, or is empty when no notification is needed.
 
 A timing regression fails CI when all three conditions hold:
 

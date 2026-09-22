@@ -40,6 +40,30 @@ test('small absolute changes and overlapping distributions do not fail', () => {
   ).toEqual([]);
 });
 
+test('PR notifications include improvements and small absolute changes beyond five percent', () => {
+  const baseline = report(Array(7).fill(100));
+  for (const median of [94, 106]) {
+    const comparison = compareReports(report(Array(7).fill(median)), baseline);
+    expect(comparison.notableChanges).toEqual(['root/check/minimal']);
+    expect(comparison.regressions).toEqual([]);
+  }
+});
+
+test('PR notifications exclude changes within or exactly at five percent', () => {
+  const baseline = report(Array(7).fill(100));
+  for (const median of [95, 96, 100, 104, 105]) {
+    expect(compareReports(report(Array(7).fill(median)), baseline).notableChanges).toEqual([]);
+  }
+});
+
+test('PR notifications require a compatible baseline', () => {
+  const baseline = report(Array(7).fill(100));
+  const current = report(Array(7).fill(500));
+  expect(compareReports(current).notableChanges).toEqual([]);
+  current.environment.node = 'v24.0.0';
+  expect(compareReports(current, baseline).notableChanges).toEqual([]);
+});
+
 test('different environments and workloads are explicitly not compared', () => {
   const baseline = report([100, 100, 100, 100, 100, 100, 100]);
   const current = report([500, 500, 500, 500, 500, 500, 500]);

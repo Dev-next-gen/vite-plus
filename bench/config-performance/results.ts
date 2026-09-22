@@ -40,6 +40,7 @@ export function summarize(samples: number[]) {
 
 export function compareReports(current: BenchmarkReport, baseline?: BenchmarkReport) {
   const regressions: string[] = [];
+  const notableChanges: string[] = [];
   let comparison = 'No baseline available; this run records the initial measurements.';
   const comparable =
     baseline !== undefined &&
@@ -53,13 +54,15 @@ export function compareReports(current: BenchmarkReport, baseline?: BenchmarkRep
     comparison = 'Baseline environment or workload differs; timing comparison skipped.';
   }
   if (comparable) {
-    comparison = `Compared with ${baseline.revision}.`;
+    comparison = `Baseline revision: \`${baseline.revision}\`.`;
   }
   const rows = current.results.map((result) => {
     const stats = summarize(result.samples);
     const previous = comparable
       ? baseline.results.find((item) => item.id === result.id)
       : undefined;
+    let baselineMedian = '—';
+    let baselineP95 = '—';
     let change = '—';
     if (comparable && !previous) {
       throw new Error(`Baseline is missing case ${result.id}`);
@@ -71,26 +74,34 @@ export function compareReports(current: BenchmarkReport, baseline?: BenchmarkRep
       const before = summarize(previous.samples);
       const delta = stats.median - before.median;
       const ratio = stats.median / before.median - 1;
-      change = `${ratio >= 0 ? '+' : ''}${(ratio * 100).toFixed(1)}%`;
+      baselineMedian = before.median.toFixed(1);
+      baselineP95 = before.p95.toFixed(1);
+      const percentage = `${ratio >= 0 ? '+' : ''}${(ratio * 100).toFixed(1)}%`;
+      change = `${delta >= 0 ? '+' : ''}${delta.toFixed(1)} ms (${percentage})`;
+      // Compare the delta directly so exactly ±5% does not cross the threshold
+      // through division rounding (for example, 105 / 100 - 1).
+      if (Math.abs(delta) > before.median * 0.05) {
+        notableChanges.push(result.id);
+      }
       // Require a substantial slowdown across the distribution, not one outlier.
       if (ratio > 0.2 && delta > 40 && stats.p25 > before.p75) {
         regressions.push(
-          `${result.id}: ${before.median.toFixed(1)} → ${stats.median.toFixed(1)} ms (${change})`,
+          `${result.id}: ${baselineMedian} → ${stats.median.toFixed(1)} ms (${percentage})`,
         );
       }
     }
     const loads =
       result.configLoads.map(({ role, count }) => `${role}: ${count}`).join(', ') || '0';
-    return `| ${result.id} | ${stats.median.toFixed(1)} | ${stats.p95.toFixed(1)} | ${change} | ${loads} |`;
+    return `| ${result.id} | ${baselineMedian} → ${stats.median.toFixed(1)} | ${baselineP95} → ${stats.p95.toFixed(1)} | ${change} | ${loads} |`;
   });
   const markdown = [
     '## Config performance',
     '',
     comparison,
     '',
-    `Revision: \`${current.revision}\`. Node ${current.environment.node}; ${current.environment.platform}/${current.environment.arch}; ${current.environment.cpu}.`,
+    `Current revision: \`${current.revision}\`. Node ${current.environment.node}; ${current.environment.platform}/${current.environment.arch}; ${current.environment.cpu}.`,
     '',
-    '| Case | Median (ms) | p95 (ms) | Median change | Config evaluations (separate probe) |',
+    '| Case | Median (ms), baseline → current | p95 (ms), baseline → current | Median change | Config evaluations (current, separate probe) |',
     '| --- | ---: | ---: | ---: | --- |',
     ...rows,
     '',
@@ -100,5 +111,5 @@ export function compareReports(current: BenchmarkReport, baseline?: BenchmarkRep
     ...regressions.map((regression) => `- Regression: ${regression}`),
     '',
   ].join('\n');
-  return { regressions, markdown };
+  return { regressions, notableChanges, markdown };
 }
