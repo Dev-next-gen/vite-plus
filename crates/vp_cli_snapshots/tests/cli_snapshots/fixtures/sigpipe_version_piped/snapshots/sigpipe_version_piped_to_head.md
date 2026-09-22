@@ -1,0 +1,11 @@
+# sigpipe_version_piped_to_head
+
+vp --version must not crash with SIGABRT (exit 134) when piped to a reader that exits early (#2661). After the SIGPIPE fix the process is killed by SIGPIPE (exit 141), the expected Unix behavior.
+
+## `bash -c 'vp --version | head -n 1; exit ${PIPESTATUS[0]}'`
+
+**Exit code:** 141
+
+```
+vp <version>
+```
