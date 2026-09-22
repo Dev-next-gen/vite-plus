@@ -120,6 +120,16 @@ static VP_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// Standalone installation progress prints the release version in
+// `info: installing vite-plus@0.3.3...`. The value changes for every release,
+// so mask only this status-line context and keep other `vite-plus@<version>`
+// output available for assertions.
+static VP_INSTALL_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(installing vite-plus@)\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?",
+    )
+    .unwrap()
+});
 // `vp create`/`vp migrate` pin the exact resolved runtime and package-manager
 // version into a scaffolded manifest's `devEngines` block (`{ "name": "yarn",
 // "version": "4.17.0", ... }`, likewise pnpm/bun/node). Those track whatever
@@ -538,6 +548,9 @@ pub fn redact_output(
     // Redact the workspace's own vite-plus/core version by package context
     // (see VP_VERSION_RE), which bumps on every release.
     output = VP_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
+
+    // Redact the release version in standalone installation progress output.
+    output = VP_INSTALL_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
 
     // Redact scaffolded devEngines runtime/package-manager pins by name
     // context (see DEV_ENGINES_VERSION_RE), which track upstream releases.
