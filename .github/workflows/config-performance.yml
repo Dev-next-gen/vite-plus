@@ -85,13 +85,15 @@ jobs:
             // A rerun can compare with the retained artifact of its own last
             // successful attempt. Upload replaces that artifact only at the end.
             const previousAttempt = [];
-            if (current.data.run_attempt > 1) {
+            const attemptNumber = Number(process.env.GITHUB_RUN_ATTEMPT);
+            if (attemptNumber > 1) {
               const attempt = await github.request(
                 'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}',
-                { ...repo, run_id: context.runId, attempt_number: current.data.run_attempt - 1 },
+                { ...repo, run_id: context.runId, attempt_number: attemptNumber - 1 },
               );
               if (attempt.data.conclusion === 'success') previousAttempt.push(current.data);
             }
+            core.info(`Attempt ${attemptNumber}: ${main.length} main, ${previousAttempt.length} previous attempt, ${previousPR.length} PR baseline candidates.`);
             for (const run of [...main, ...previousAttempt, ...previousPR]) {
               const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ ...repo, run_id: run.id });
               if (artifacts.data.artifacts.some(artifact => artifact.name === 'config-performance' && !artifact.expired)) {
