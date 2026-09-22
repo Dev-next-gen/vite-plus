@@ -82,7 +82,17 @@ jobs:
               run.event === 'pull_request' && run.head_branch === pr.head.ref &&
               run.head_repository?.full_name === pr.head.repo.full_name
             ) : [];
-            for (const run of [...main, ...previousPR]) {
+            // A rerun can compare with the retained artifact of its own last
+            // successful attempt. Upload replaces that artifact only at the end.
+            const previousAttempt = [];
+            if (current.data.run_attempt > 1) {
+              const attempt = await github.request(
+                'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}',
+                { ...repo, run_id: context.runId, attempt_number: current.data.run_attempt - 1 },
+              );
+              if (attempt.data.conclusion === 'success') previousAttempt.push(current.data);
+            }
+            for (const run of [...main, ...previousAttempt, ...previousPR]) {
               const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ ...repo, run_id: run.id });
               if (artifacts.data.artifacts.some(artifact => artifact.name === 'config-performance' && !artifact.expired)) {
                 core.setOutput('run-id', String(run.id));

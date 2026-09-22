@@ -22,7 +22,7 @@ The benchmark uses temporary projects outside the checkout so ancestor config di
 
 The [Config Performance workflow](../../.github/workflows/config-performance.yml) runs on relevant PR updates, relevant pushes to `main`, daily, and on manual dispatch. Draft PRs run normally. The daily schedule becomes active after the workflow reaches `main`.
 
-CI retains JSON samples and Markdown reports for 90 days. It compares with the latest available successful `main` run. Before the workflow reaches `main`, PR updates use an earlier successful run of the same branch when available. The first run records a baseline. Workload, Node version, operating system, architecture, CPU model, and CPU count must match for a timing comparison; a mismatch is reported explicitly.
+CI retains JSON samples and Markdown reports for 90 days. It compares with the latest available successful `main` run. Before the workflow reaches `main`, reruns can use their previous successful attempt, and PR updates can use an earlier successful run of the same branch. The first run records a baseline. Workload, Node version, operating system, architecture, CPU model, and CPU count must match for a timing comparison; a mismatch is reported explicitly.
 
 A timing regression fails CI when all three conditions hold:
 
@@ -32,4 +32,4 @@ A timing regression fails CI when all three conditions hold:
 
 This catches substantial, sustained regressions while tolerating isolated slow samples. It does not prove that smaller changes are harmless. Review the medians, p95 values, raw samples, and config counts when changing config resolution. CPU load and runner image changes can still affect results. Config-count ceilings apply even when timing results are not comparable.
 
-The workload hash changes with the fixture or case definitions, so those changes establish a new timing baseline. Tool versions are recorded but are not part of the compatibility check: dependency updates must remain visible in the comparison.
+The workload hash changes with the fixture or command definitions, so those changes establish a new timing baseline. Evaluation ceilings are excluded from the hash so lowering a ceiling after an optimization preserves the timing comparison. Tool versions are recorded but are not part of the compatibility check: dependency updates must remain visible in the comparison.

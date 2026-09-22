@@ -45,7 +45,9 @@ export function compareReports(current: BenchmarkReport, baseline?: BenchmarkRep
     baseline !== undefined &&
     baseline.schemaVersion === current.schemaVersion &&
     baseline.workload === current.workload &&
-    JSON.stringify(baseline.environment) === JSON.stringify(current.environment);
+    (Object.keys(current.environment) as (keyof BenchmarkReport['environment'])[]).every(
+      (key) => baseline.environment[key] === current.environment[key],
+    );
 
   if (baseline && !comparable) {
     comparison = 'Baseline environment or workload differs; timing comparison skipped.';

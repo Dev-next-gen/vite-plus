@@ -165,7 +165,18 @@ function measure(item: (typeof cases)[number]) {
 const report: BenchmarkReport = {
   schemaVersion: 1,
   workload: createHash('sha256')
-    .update(JSON.stringify({ configs, cases, source: files.map((_, i) => source(i)) }))
+    .update(
+      JSON.stringify({
+        configs,
+        cases: cases.map(({ id, config, command, package: fromPackage }) => ({
+          id,
+          config,
+          command,
+          fromPackage,
+        })),
+        source: files.map((_, i) => source(i)),
+      }),
+    )
     .digest('hex'),
   revision: run('git', ['rev-parse', 'HEAD'], repo).stdout.trim(),
   environment: {
