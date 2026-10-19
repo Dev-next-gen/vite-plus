@@ -42,6 +42,7 @@ await cp(join(rolldownPluginUtilsDir, 'dist'), join(projectDir, 'dist', 'pluginu
 
 - `@rolldown/pluginutils` → `@voidzero-dev/vite-plus-core/rolldown/pluginutils`
 - `rolldown/*` → `@voidzero-dev/vite-plus-core/rolldown/*`
+- Replace the WebContainer fallback's `rolldown/package.json` lookup with the bundled Rolldown version. The WASM download must use that version, not the core package version.
 - In release builds: supported `@rolldown/binding-*` → `@voidzero-dev/vite-plus-*`
 
 **Input**: `rolldown/packages/rolldown/dist/`
@@ -57,6 +58,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 2. **Add RewriteImportsPlugin** - Rewrites vite/rolldown imports at build time
 3. **Rewrite static paths** - Fixes `VITE_PACKAGE_DIR`, `CLIENT_ENTRY`, `BUNDLED_DEV_CLIENT_ENTRY`, `ENV_ENTRY` constants
 4. **Copy additional files** - `misc/`, `.d.ts` files, `types/`, `client.d.ts`
+5. **Copy the bin script** - `bin/vite.js`, with its CLI import pointed at `../node/cli.js`. `vp dev`, `vp build`, and `vp preview` start through it, as `vite` does, so the startup time (`ready in N ms`), `--debug`, `--filter`, `--profile`, and Node's compile cache work
 
 **Input**: `vite/packages/vite/`
 **Output**: `dist/vite/`
@@ -127,6 +129,16 @@ Located in `build-support/rewrite-module-specifiers.ts`, this utility rewrites s
 | `rolldown/*`              | `@voidzero-dev/vite-plus-core/rolldown/*`             |
 | `@rolldown/pluginutils`   | `@voidzero-dev/vite-plus-core/rolldown/pluginutils`   |
 | `@rolldown/pluginutils/*` | `@voidzero-dev/vite-plus-core/rolldown/pluginutils/*` |
+
+### Detecting Missed Rewrites
+
+`__tests__/build-artifacts.spec.ts` snapshots the remaining bare `rolldown` and `@rolldown/pluginutils` names in all built JavaScript and declarations. It parses string literals and template literals, then records references to constants and their aliases. This includes package names passed to `require.resolve()` or `import.meta.resolve()`, which import-only checks miss.
+
+The snapshot allows CLI branding, embedded package metadata, and the browser runtime import that Vite rewrites before serving. Review new entries when upstream code changes; do not accept unresolved Node package lookups. Dynamically constructed names can escape static checks, so the installed-package bundled dev snapshots also verify runtime resolution without a separate Rolldown installation.
+
+Native `@rolldown/binding-*` references have separate rewrite checks, described below.
+
+The `rolldown_webcontainer_fallback` CLI snapshot executes the packed binding loader in a simulated WebContainer. It checks fresh and cached WASM bindings without a standalone `rolldown` package. The fixture uses real Node metadata resolution and a fake installer, and asserts that both paths use the bundled Rolldown version.
 
 ### Release Build: Native Binding Rewriting
 
@@ -212,6 +224,8 @@ dist/
 │   ├── plugins-index.mjs
 │   └── ...
 ├── vite/                  # Vite
+│   ├── bin/
+│   │   └── vite.js        # Entry for vp dev/build/preview
 │   ├── node/
 │   │   ├── index.js
 │   │   ├── index.d.ts

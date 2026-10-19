@@ -231,7 +231,7 @@ async fn install_platform_and_main(
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
     // Install production dependencies (pnpm installs vite-plus + all transitive deps)
-    install::install_production_deps(version_dir, registry, !silent).await?;
+    install::install_production_deps(version_dir, registry, !silent, None).await?;
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;
@@ -263,6 +263,10 @@ async fn install_platform_and_main(
             style(output::CHECK).green(),
             current_version,
             output::ARROW,
+            new_version
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
+            "\n  Run `vp migrate` in any Vite+ project using a version under {} to upgrade that project's Vite+ version.",
             new_version
         ));
         vp_shared::output::print_stdout_line(format_args!(

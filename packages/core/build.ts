@@ -205,6 +205,18 @@ async function buildVite() {
                 };
               }
             }
+            if (id.endsWith(join('vite', 'src', 'node', 'plugins', 'clientInjections.ts'))) {
+              const { magicString } = meta;
+              if (magicString) {
+                // Resolve the runtime bundled with core. Keep ROLLDOWN_DEV_RUNTIME_ENTRY
+                // unchanged: it also matches the import in bundledDevClient.mjs.
+                magicString.replace(
+                  'import.meta.resolve(ROLLDOWN_DEV_RUNTIME_ENTRY)',
+                  `import.meta.resolve('${pkgJson.name}/rolldown/experimental/runtime')`,
+                );
+                return { code: magicString };
+              }
+            }
             return undefined;
           },
         },
@@ -237,6 +249,22 @@ async function buildVite() {
   await cp(join(rolldownViteSourceDir, 'misc'), join(projectDir, 'dist/vite/misc'), {
     recursive: true,
   });
+
+  // `vp dev`, `vp build`, and `vp preview` start through Vite's bin script, as
+  // `vite` does (see BUNDLING.md). Point its CLI import at the `dist/vite` layout.
+  const viteBin = await readFile(join(rolldownViteSourceDir, 'bin', 'vite.js'), 'utf-8');
+  const viteBinCliImport = `import('../dist/node/cli.js')`;
+  if (!viteBin.includes(viteBinCliImport)) {
+    throw new Error(
+      `Expected vite bin/vite.js to contain \`${viteBinCliImport}\`; ` +
+        'update the bin/vite.js rewrite in packages/core/build.ts for the current upstream script.',
+    );
+  }
+  await mkdir(join(projectDir, 'dist/vite/bin'), { recursive: true });
+  await writeFile(
+    join(projectDir, 'dist/vite/bin/vite.js'),
+    viteBin.replaceAll(viteBinCliImport, `import('../node/cli.js')`),
+  );
 
   // Copy and rewrite .d.ts files
   // Normalize glob pattern to use forward slashes on Windows
@@ -320,6 +348,12 @@ async function bundleRolldownPluginutils() {
 async function bundleRolldown() {
   await mkdir(join(projectDir, 'dist/rolldown'), { recursive: true });
 
+  const { version: rolldownVersion }: { version: string } = JSON.parse(
+    await readFile(join(rolldownSourceDir, 'package.json'), 'utf-8'),
+  );
+  const webContainerVersionLookup =
+    'JSON.parse(fs.readFileSync(__require.resolve("rolldown/package.json"), "utf-8")).version';
+  let webContainerVersionRewrites = 0;
   const rolldownFiles = new Set<string>();
 
   await cp(join(rolldownSourceDir, 'dist'), join(projectDir, 'dist/rolldown'), {
@@ -357,6 +391,12 @@ async function bundleRolldown() {
       file.endsWith('.d.ts')
     ) {
       let source = await readFile(file, 'utf-8');
+      // WebContainer downloads the upstream WASM binding. Inline Rolldown's
+      // version so it needs neither an undeclared package nor Vite+'s version.
+      source = source.replaceAll(webContainerVersionLookup, () => {
+        webContainerVersionRewrites++;
+        return JSON.stringify(rolldownVersion);
+      });
       const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
       if (vitePlusPlatformSuffixes) {
         const result = rewriteRolldownBindingRequires(source, {
@@ -374,6 +414,13 @@ async function bundleRolldown() {
       const newSource = rewriteModuleSpecifiers(source, file, { rules });
       await writeFile(file, newSource);
     }
+  }
+
+  if (webContainerVersionRewrites !== 1) {
+    throw new Error(
+      `bundleRolldown: expected one WebContainer version lookup, found ${webContainerVersionRewrites}; ` +
+        'review the upstream fallback and update or remove its version rewrite',
+    );
   }
 
   // Every published platform suffix must find its loader branch, and each
